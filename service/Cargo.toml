@@ -1,0 +1,6 @@
+[package]
+name = "system-monitor-lamp"
+version = "0.1.0"
+authors = ["Jocelyn Turcotte <turcotte.j@gmail.com>"]
+
+[dependencies]
