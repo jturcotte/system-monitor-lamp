@@ -1,5 +1,5 @@
-#ifndef usb_serial_h__
-#define usb_serial_h__
+#ifndef my_usb_private_h__
+#define my_usb_private_h__
 
 #include <stdint.h>
 
@@ -35,7 +35,7 @@ extern "C"{
  **************************************************************************/
 
 #ifndef STR_PRODUCT
-#define STR_PRODUCT             L"Teensyduino RawHID Device"
+#define STR_PRODUCT             L"Teensyduino Keyboard/RawHID"
 #endif
 #ifndef STR_RAWHID
 #define STR_RAWHID		L"Teensyduino RawHID"
@@ -67,8 +67,20 @@ extern "C"{
 #define DEBUG_RX_SIZE		32
 #define DEBUG_RX_BUFFER		EP_DOUBLE_BUFFER
 
-#define NUM_ENDPOINTS		5
-#define NUM_INTERFACE		2
+#define KEYBOARD_INTERFACE	2
+#define KEYBOARD_ENDPOINT	5
+#define KEYBOARD_SIZE		8
+#define KEYBOARD_BUFFER		EP_DOUBLE_BUFFER
+#define KEYBOARD_INTERVAL	1
+
+#define KEYMEDIA_INTERFACE      3
+#define KEYMEDIA_ENDPOINT       6
+#define KEYMEDIA_SIZE           8
+#define KEYMEDIA_BUFFER         EP_DOUBLE_BUFFER
+#define KEYMEDIA_INTERVAL       4
+
+#define NUM_ENDPOINTS		7
+#define NUM_INTERFACE		4
 
 
 // setup
@@ -79,8 +91,14 @@ void usb_shutdown(void);		// shut off USB
 extern volatile uint8_t usb_configuration;
 extern volatile uint8_t usb_suspended;
 extern volatile uint8_t debug_flush_timer;
+extern uint8_t keyboard_report_data[];
+extern uint8_t keyboard_idle_count;
+extern volatile uint8_t keyboard_leds;
 extern volatile uint16_t rawhid_rx_timeout_count;
 extern volatile uint16_t rawhid_tx_timeout_count;
+extern uint8_t keymedia_report_data[8];
+extern uint16_t keymedia_consumer_keys[4];
+extern uint8_t keymedia_system_keys[3];
 
 #ifdef __cplusplus
 } // extern "C"
