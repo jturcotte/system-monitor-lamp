@@ -56,6 +56,49 @@ impl CpuInfo {
     }
 }
 
+pub struct NetInfo {
+    last_vals: Vec<(u32, u32)>,
+}
+
+impl NetInfo {
+    pub fn new() -> NetInfo {
+        NetInfo {
+            last_vals: Vec::new()
+        }
+    }
+
+    pub fn fetch(&mut self) -> (u32, u32) {
+        let f = BufReader::new(File::open("/proc/net/dev").unwrap());
+        let vals = f.lines()
+            .filter_map(|r| {
+                let line = r.unwrap();
+                let split1 = line.split(':').collect::<Vec<_>>();
+                let name = split1[0].trim();
+                if name.starts_with("en") || name.starts_with("wl") {
+                    let mut nums = split1[1].split_whitespace();
+                    let received_bytes = nums.nth(0).and_then(|s| s.parse::<u32>().ok()).unwrap();
+                    let sent_bytes = nums.nth(7).and_then(|s| s.parse::<u32>().ok()).unwrap();
+                    Some((received_bytes, sent_bytes))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if self.last_vals.is_empty() {
+            self.last_vals = vals.clone();
+        } 
+
+        let bytes = self.last_vals
+            .iter()
+            .zip(vals.clone())
+            .map(|(&(last_recv, last_sent), (recv, sent))| (recv - last_recv, sent - last_sent))
+            .fold((0, 0), |(acc_recv, acc_sent), (recv, sent)| (acc_recv + recv, acc_sent + sent));
+        self.last_vals = vals;
+
+        bytes
+    }
+}
 
 fn main() {
     let vid: u16 = 0x16c0;
@@ -93,6 +136,7 @@ fn main() {
 
     let duration = time::Duration::from_millis(2000);
     let mut cpu_info = CpuInfo::new();
+    let mut net_info = NetInfo::new();
     loop {
         let percents = cpu_info.fetch();
 
@@ -101,22 +145,40 @@ fn main() {
             println!("\tCPU {}", p);
         }
 
+        let bytes = net_info.fetch();
+        println!("NET {} {}", bytes.0, bytes.1);
         let num_leds = 12;
         let led_per_cpu = num_leds / cpu_info.last_vals.len();
-        let led_iter = percents
+        let led_per_net_param = num_leds / 2;
+        let cpu_leds_iter = percents
             .iter()
             .flat_map(|p| {
                 let mut dst = Vec::new();
                 for _ in 0..led_per_cpu {
                     dst.push((255. * p) as u8);
-                    dst.push(0);
-                    dst.push(0);
                 }
                 dst
             });
+        let mut net_recv_leds = Vec::new();
+        let mut net_sent_leds = Vec::new();
+        for _ in 0..led_per_net_param {
+            net_recv_leds.push((255. * bytes.0 as f32 / 1000000.) as u8);
+            net_sent_leds.push((255. * bytes.1 as f32 / 100000.) as u8);
+        }
+        let leds_iter = cpu_leds_iter
+            .zip(net_recv_leds.iter().chain(net_sent_leds.iter()))
+            .zip(std::iter::repeat(0u8).take(num_leds))
+            .flat_map(|((r, g), b)| {
+                let mut dst = Vec::new();
+                dst.push(r);
+                dst.push(*g);
+                dst.push(b);
+                dst
+            });
+
         let buf =
             std::iter::once(0u8)
-            .chain(led_iter)
+            .chain(leds_iter)
             .collect::<Vec<u8>>();
         match device.write(&buf[..]) {
             Ok(s) => println!("SIZE WRITTEN : {}", s),
