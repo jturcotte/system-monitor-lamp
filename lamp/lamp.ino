@@ -1,3 +1,7 @@
+#ifndef USB_RAWHID
+#error Teensiduino must be configured to use the "Raw HID" USB Type.
+#endif
+
 #include "Keyboard.h"
 #include "my_usb_api.h"
 #include <Adafruit_NeoPixel.h>
