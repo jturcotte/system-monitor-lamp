@@ -1,16 +1,21 @@
 extern crate hidapi;
 
-use std::{thread, time};
-
 use hidapi::HidApi;
 
-// use std::env;
+use std::{iter, thread, time};
 use std::fs::File;
-// use std::io::prelude::*;
+use std::io::{BufRead, BufReader};
 
-use std::io::BufReader;
-use std::io::BufRead;
-// use std::path::Path;
+const DEVICE_VID: u16 = 0x16c0;
+const DEVICE_PID: u16 = 0x0486;
+const REPORT_INTERVAL: time::Duration = time::Duration::from_millis(2000);
+// FIXME: Should ideally be abstracted on the wire, but this makes things easier.
+const NUM_LEDS: usize = 12;
+// FIXME: Allow overriding from the command line.
+const DISK_READ_CAP: f64 = 200000000.;
+const DISK_WRITTEN_CAP:f64 = 200000000.;
+const NET_RECV_CAP:f32 = 1000000.;
+const NET_SENT_CAP:f32 = 100000.;
 
 pub struct CpuInfo {
     last_vals: Vec<(u32, u32)>,
@@ -29,16 +34,14 @@ impl CpuInfo {
             let it = f.lines()
                 .map(|line| line.unwrap())
                 .filter(|line| line.starts_with("cpu") && !line.starts_with("cpu "));
-                // .map(|line| line.split(":").next().unwrap().to_owned());
             it.map(|p| {
-                let nums = p.split(' ').map(|s| s.parse()).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect::<Vec<u32>>();
-                let total: u32 = nums[..8].iter().sum();
-                let idle: u32 = nums[3..5].iter().sum();
-                let busy = total - idle;
-                // println!("{} ->> {} {}", p, total, idle);
-                (busy, total)
-            })
-            .collect::<Vec<_>>()
+                    let nums = p.split(' ').map(|s| s.parse()).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect::<Vec<u32>>();
+                    let total: u32 = nums[..8].iter().sum();
+                    let idle: u32 = nums[3..5].iter().sum();
+                    let busy = total - idle;
+                    (busy, total)
+                })
+                .collect::<Vec<_>>()
         };
 
         if self.last_vals.is_empty() {
@@ -47,7 +50,7 @@ impl CpuInfo {
 
         let percents = self.last_vals
             .iter()
-            .zip(vals.clone())
+            .zip(&vals)
             .map(|(&(last_busy, last_total), (busy, total))| (busy - last_busy) as f32 / (total - last_total) as f32)
             .collect();
         self.last_vals = vals;
@@ -91,7 +94,7 @@ impl NetInfo {
 
         let bytes = self.last_vals
             .iter()
-            .zip(vals.clone())
+            .zip(&vals)
             .map(|(&(last_recv, last_sent), (recv, sent))| (recv - last_recv, sent - last_sent))
             .fold((0, 0), |(acc_recv, acc_sent), (recv, sent)| (acc_recv + recv, acc_sent + sent));
         self.last_vals = vals;
@@ -117,6 +120,7 @@ impl DiskInfo {
             .filter_map(|r| {
                 let line = r.unwrap();
                 let split = line.split_whitespace().collect::<Vec<_>>();
+                // 8 major and 0 minor seems to apply to hard disk devices.
                 if split[0] == "8" && split[1] == "0" {
                     let read_bytes = split[5].parse::<u64>().unwrap() * 512;
                     let written_bytes = split[9].parse::<u64>().unwrap() * 512;
@@ -133,7 +137,7 @@ impl DiskInfo {
 
         let bytes = self.last_vals
             .iter()
-            .zip(vals.clone())
+            .zip(&vals)
             .map(|(&(last_read, last_written), (read, written))| (read - last_read, written - last_written))
             .fold((0, 0), |(acc_read, acc_written), (read, written)| (acc_read + read, acc_written + written));
         self.last_vals = vals;
@@ -143,99 +147,56 @@ impl DiskInfo {
 }
 
 fn main() {
-    let vid: u16 = 0x16c0;
-    let pid: u16 = 0x0486;
-
-    let device = match HidApi::new() {
-        Ok(api) => {
-            for device in api.devices() {
-                println!("{:#?}", device);
-            }
-            match api.open(vid, pid) {
-                Ok(device) => device,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(-1);
-                },
-            }
-        },
+    let device = match HidApi::new().and_then(|api| api.open(DEVICE_VID, DEVICE_PID)) {
+        Ok(device) => device,
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error opening the USB device: {}", e);
             std::process::exit(-1);
         },
     };
 
-    // let mut f = File::open("/proc/stat").expect("file not found");
-
-    // let mut contents = String::new();
-    // f.read_to_string(&mut contents)
-    //     .expect("something went wrong reading the file");
-
-    // contents.split
-    // println!("With text:\n{}", contents);
-
-
-
-    let duration = time::Duration::from_millis(2000);
     let mut cpu_info = CpuInfo::new();
     let mut net_info = NetInfo::new();
     let mut disk_info = DiskInfo::new();
     loop {
         let cpu_stats = cpu_info.fetch_stats();
-
-        println!("Starting");
-        for p in &cpu_stats {
-            println!("\tCPU {}", p);
-        }
-
         let disk_stats = disk_info.fetch_stats();
-        println!("DISK {} {}", disk_stats.0, disk_stats.1);
         let net_stats = net_info.fetch_stats();
-        println!("NET {} {}", net_stats.0, net_stats.1);
-        let num_leds = 12;
-        let led_per_cpu = num_leds / cpu_info.last_vals.len();
-        let led_per_access_param = num_leds / 2;
+        println!("CPU {:?}", cpu_stats);
+        println!("DISK [{}, {}]", disk_stats.0, disk_stats.1);
+        println!("NET [{}, {}]", net_stats.0, net_stats.1);
+
+        let led_per_cpu = NUM_LEDS / cpu_info.last_vals.len();
+        let led_per_access_param = NUM_LEDS / 2;
         let cpu_leds_iter = cpu_stats
             .iter()
-            .flat_map(|p| {
-                let mut dst = Vec::new();
-                for _ in 0..led_per_cpu {
-                    dst.push((255. * p) as u8);
-                }
-                dst
-            });
+            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_cpu));
 
         let mut disk_read_leds = Vec::new();
         let mut disk_written_leds = Vec::new();
         let mut net_recv_leds = Vec::new();
         let mut net_sent_leds = Vec::new();
         for _ in 0..led_per_access_param {
-            disk_read_leds.push((255. * disk_stats.0 as f64 / 200000000.) as u8);
-            disk_written_leds.push((255. * disk_stats.1 as f64 / 200000000.) as u8);
-            net_recv_leds.push((255. * net_stats.0 as f32 / 1000000.) as u8);
-            net_sent_leds.push((255. * net_stats.1 as f32 / 100000.) as u8);
+            disk_read_leds.push((255. * (disk_stats.0 as f64 / DISK_READ_CAP).min(1.)) as u8);
+            disk_written_leds.push((255. * (disk_stats.1 as f64 / DISK_WRITTEN_CAP).min(1.)) as u8);
+            net_recv_leds.push((255. * (net_stats.0 as f32 / NET_RECV_CAP).min(1.)) as u8);
+            net_sent_leds.push((255. * (net_stats.1 as f32 / NET_SENT_CAP).min(1.)) as u8);
         }
 
         let leds_iter = cpu_leds_iter
             .zip(disk_read_leds.iter().chain(disk_written_leds.iter()))
             .zip(net_recv_leds.iter().chain(net_sent_leds.iter()))
-            .flat_map(|((r, g), b)| {
-                let mut dst = Vec::new();
-                dst.push(r);
-                dst.push(*g);
-                dst.push(*b);
-                dst
-            });
+            .flat_map(|((r, g), b)| vec!(r, *g, *b));
 
         let buf =
-            std::iter::once(0u8)
+            iter::once(0u8)
             .chain(leds_iter)
             .collect::<Vec<u8>>();
         match device.write(&buf[..]) {
-            Ok(s) => println!("SIZE WRITTEN : {}", s),
+            Ok(s) => println!("Size written to the USB device: {}", s),
             Err(e) => { eprintln!("Error: {}", e); std::process::exit(-1); }
         }
 
-        thread::sleep(duration);
+        thread::sleep(REPORT_INTERVAL);
     }
 }
