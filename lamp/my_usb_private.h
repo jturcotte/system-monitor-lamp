@@ -35,7 +35,7 @@ extern "C"{
  **************************************************************************/
 
 #ifndef STR_PRODUCT
-#define STR_PRODUCT             L"Teensyduino Keyboard/RawHID"
+#define STR_PRODUCT             L"System Monitor Lamp"
 #endif
 #ifndef STR_RAWHID
 #define STR_RAWHID		L"Teensyduino RawHID"
