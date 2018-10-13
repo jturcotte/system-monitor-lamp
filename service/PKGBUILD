@@ -1,0 +1,22 @@
+# Convenience for local makepkg
+pkgname=system-monitor-lamp
+pkgver=1
+pkgrel=1
+pkgdesc="System Monitor Lamp report service"
+arch=('x86_64' 'i686')
+license=('MIT')
+depends=(hidapi)
+makedepends=(cargo)
+
+build() {
+    cd ..
+    cargo build --release
+}
+
+package() {
+    cd ..
+    mkdir -p $pkgdir/usr/bin
+    install target/release/system-monitor-lamp $pkgdir/usr/bin/system-monitor-lamp
+    install -Dm644 $pkgname.service $pkgdir/usr/lib/systemd/system/$pkgname.service
+}
+
