@@ -148,7 +148,11 @@ impl DiskInfo {
 
 fn main() {
     let device = match HidApi::new().and_then(|api| api.open(DEVICE_VID, DEVICE_PID)) {
-        Ok(device) => device,
+        Ok(device) => {
+            let name = device.get_product_string().ok().and_then(|o| o).unwrap_or("NONAME".to_string());
+            println!("Starting to send system information to device [{}]", name);
+            device
+        },
         Err(e) => {
             eprintln!("Error opening the USB device: {}", e);
             std::process::exit(-1);
@@ -162,9 +166,7 @@ fn main() {
         let cpu_stats = cpu_info.fetch_stats();
         let disk_stats = disk_info.fetch_stats();
         let net_stats = net_info.fetch_stats();
-        println!("CPU {:?}", cpu_stats);
-        println!("DISK [{}, {}]", disk_stats.0, disk_stats.1);
-        println!("NET [{}, {}]", net_stats.0, net_stats.1);
+        // println!("CPU {:?} DISK [{}, {}] NET [{}, {}]", cpu_stats, disk_stats.0, disk_stats.1, net_stats.0, net_stats.1);
 
         let led_per_cpu = NUM_LEDS / cpu_info.last_vals.len();
         let led_per_access_param = NUM_LEDS / 2;
@@ -192,11 +194,7 @@ fn main() {
             iter::once(0u8)
             .chain(leds_iter)
             .collect::<Vec<u8>>();
-        match device.write(&buf[..]) {
-            Ok(s) => println!("Size written to the USB device: {}", s),
-            Err(e) => { eprintln!("Error: {}", e); std::process::exit(-1); }
-        }
-
+        device.write(&buf[..]).expect("Error writing to the USB device");
         thread::sleep(REPORT_INTERVAL);
     }
 }
