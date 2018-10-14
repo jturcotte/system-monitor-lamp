@@ -5,3 +5,5 @@ authors = ["Jocelyn Turcotte <turcotte.j@gmail.com>"]
 
 [dependencies]
 hidapi = "0.5.0"
+libc = "*"
+mach = "0.2.2"

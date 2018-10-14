@@ -20,12 +20,11 @@
  */
 
 extern crate hidapi;
+mod platform;
 
 use hidapi::HidApi;
 
 use std::{iter, thread, time};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 
 const DEVICE_VID: u16 = 0x16c0;
 const DEVICE_PID: u16 = 0x0486;
@@ -50,20 +49,7 @@ impl CpuInfo {
     }
 
     pub fn fetch_stats(&mut self) -> Vec<f32> {
-        let vals = {
-            let f = BufReader::new(File::open("/proc/stat").unwrap());
-            let it = f.lines()
-                .map(|line| line.unwrap())
-                .filter(|line| line.starts_with("cpu") && !line.starts_with("cpu "));
-            it.map(|p| {
-                    let nums = p.split(' ').map(|s| s.parse()).filter(|r| r.is_ok()).map(|r| r.unwrap()).collect::<Vec<u32>>();
-                    let total: u32 = nums[..8].iter().sum();
-                    let idle: u32 = nums[3..5].iter().sum();
-                    let busy = total - idle;
-                    (busy, total)
-                })
-                .collect::<Vec<_>>()
-        };
+        let vals = platform::cpu_stats();
 
         if self.last_vals.is_empty() {
             self.last_vals = vals.clone();
@@ -92,22 +78,7 @@ impl NetInfo {
     }
 
     pub fn fetch_stats(&mut self) -> (u32, u32) {
-        let f = BufReader::new(File::open("/proc/net/dev").unwrap());
-        let vals = f.lines()
-            .filter_map(|r| {
-                let line = r.unwrap();
-                let split1 = line.split(':').collect::<Vec<_>>();
-                let name = split1[0].trim();
-                if name.starts_with("en") || name.starts_with("wl") {
-                    let mut nums = split1[1].split_whitespace();
-                    let received_bytes = nums.nth(0).and_then(|s| s.parse::<u32>().ok()).unwrap();
-                    let sent_bytes = nums.nth(7).and_then(|s| s.parse::<u32>().ok()).unwrap();
-                    Some((received_bytes, sent_bytes))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let vals = platform::net_stats();
 
         if self.last_vals.is_empty() {
             self.last_vals = vals.clone();
@@ -136,21 +107,7 @@ impl DiskInfo {
     }
 
     pub fn fetch_stats(&mut self) -> (u64, u64) {
-        let f = BufReader::new(File::open("/proc/diskstats").unwrap());
-        let vals = f.lines()
-            .filter_map(|r| {
-                let line = r.unwrap();
-                let split = line.split_whitespace().collect::<Vec<_>>();
-                // 8 major and 0 minor seems to apply to hard disk devices.
-                if split[0] == "8" && split[1] == "0" {
-                    let read_bytes = split[5].parse::<u64>().unwrap() * 512;
-                    let written_bytes = split[9].parse::<u64>().unwrap() * 512;
-                    Some((read_bytes, written_bytes))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let vals = platform::disk_stats();
 
         if self.last_vals.is_empty() {
             self.last_vals = vals.clone();
