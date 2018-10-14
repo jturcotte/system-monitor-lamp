@@ -165,8 +165,9 @@ fn main() {
             .zip(net_leds_iter)
             .flat_map(|((r, g), b)| vec!(r, g, b));
 
+        let report_id = 0u8;
         let buf =
-            iter::once(0u8)
+            iter::once(report_id)
             .chain(leds_iter)
             .collect::<Vec<u8>>();
         device.write(&buf[..]).expect("Error writing to the USB device");
