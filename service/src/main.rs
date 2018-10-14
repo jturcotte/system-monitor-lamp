@@ -34,8 +34,8 @@ const NUM_LEDS: usize = 12;
 // FIXME: Allow overriding from the command line.
 const DISK_READ_CAP: f64 = 200000000.;
 const DISK_WRITTEN_CAP:f64 = 200000000.;
-const NET_RECV_CAP:f32 = 1000000.;
-const NET_SENT_CAP:f32 = 100000.;
+const NET_RECV_CAP:f64 = 1000000.;
+const NET_SENT_CAP:f64 = 100000.;
 
 pub struct CpuInfo {
     last_vals: Vec<(u32, u32)>,
@@ -48,7 +48,7 @@ impl CpuInfo {
         }
     }
 
-    pub fn fetch_stats(&mut self) -> Vec<f32> {
+    pub fn fetch_stats(&mut self) -> Vec<f64> {
         let vals = platform::cpu_stats();
 
         if self.last_vals.is_empty() {
@@ -58,7 +58,7 @@ impl CpuInfo {
         let percents = self.last_vals
             .iter()
             .zip(&vals)
-            .map(|(&(last_busy, last_total), (busy, total))| (busy - last_busy) as f32 / (total - last_total) as f32)
+            .map(|(&(last_busy, last_total), (busy, total))| (busy - last_busy) as f64 / (total - last_total) as f64)
             .collect();
         self.last_vals = vals;
 
@@ -67,6 +67,7 @@ impl CpuInfo {
 }
 
 pub struct NetInfo {
+    // FIXME: Technically this should be a map with the interface name as its key.
     last_vals: Vec<(u32, u32)>,
 }
 
@@ -77,7 +78,7 @@ impl NetInfo {
         }
     }
 
-    pub fn fetch_stats(&mut self) -> (u32, u32) {
+    pub fn fetch_stats(&mut self) -> Vec<f64> {
         let vals = platform::net_stats();
 
         if self.last_vals.is_empty() {
@@ -91,7 +92,7 @@ impl NetInfo {
             .fold((0, 0), |(acc_recv, acc_sent), (recv, sent)| (acc_recv + recv, acc_sent + sent));
         self.last_vals = vals;
 
-        bytes
+        vec!((bytes.0 as f64 / NET_RECV_CAP).min(1.), (bytes.1 as f64 / NET_SENT_CAP).min(1.))
     }
 }
 
@@ -106,7 +107,7 @@ impl DiskInfo {
         }
     }
 
-    pub fn fetch_stats(&mut self) -> (u64, u64) {
+    pub fn fetch_stats(&mut self) -> Vec<f64> {
         let vals = platform::disk_stats();
 
         if self.last_vals.is_empty() {
@@ -120,7 +121,7 @@ impl DiskInfo {
             .fold((0, 0), |(acc_read, acc_written), (read, written)| (acc_read + read, acc_written + written));
         self.last_vals = vals;
 
-        bytes
+        vec!((bytes.0 as f64 / DISK_READ_CAP).min(1.), (bytes.1 as f64 / DISK_WRITTEN_CAP).min(1.))
     }
 }
 
@@ -144,29 +145,25 @@ fn main() {
         let cpu_stats = cpu_info.fetch_stats();
         let disk_stats = disk_info.fetch_stats();
         let net_stats = net_info.fetch_stats();
-        // println!("CPU {:?} DISK [{}, {}] NET [{}, {}]", cpu_stats, disk_stats.0, disk_stats.1, net_stats.0, net_stats.1);
+        // println!("CPU {:?} DISK {:?} NET {:?}", cpu_stats, disk_stats, net_stats);
 
-        let led_per_cpu = NUM_LEDS / cpu_info.last_vals.len();
-        let led_per_access_param = NUM_LEDS / 2;
+        let led_per_cpu_param = NUM_LEDS / cpu_stats.len();
+        let led_per_disk_param = NUM_LEDS / disk_stats.len();
+        let led_per_net_param = NUM_LEDS / net_stats.len();
         let cpu_leds_iter = cpu_stats
             .iter()
-            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_cpu));
-
-        let mut disk_read_leds = Vec::new();
-        let mut disk_written_leds = Vec::new();
-        let mut net_recv_leds = Vec::new();
-        let mut net_sent_leds = Vec::new();
-        for _ in 0..led_per_access_param {
-            disk_read_leds.push((255. * (disk_stats.0 as f64 / DISK_READ_CAP).min(1.)) as u8);
-            disk_written_leds.push((255. * (disk_stats.1 as f64 / DISK_WRITTEN_CAP).min(1.)) as u8);
-            net_recv_leds.push((255. * (net_stats.0 as f32 / NET_RECV_CAP).min(1.)) as u8);
-            net_sent_leds.push((255. * (net_stats.1 as f32 / NET_SENT_CAP).min(1.)) as u8);
-        }
+            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_cpu_param));
+        let disk_leds_iter = disk_stats
+            .iter()
+            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_disk_param));
+        let net_leds_iter = net_stats
+            .iter()
+            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_net_param));
 
         let leds_iter = cpu_leds_iter
-            .zip(disk_read_leds.iter().chain(disk_written_leds.iter()))
-            .zip(net_recv_leds.iter().chain(net_sent_leds.iter()))
-            .flat_map(|((r, g), b)| vec!(r, *g, *b));
+            .zip(disk_leds_iter)
+            .zip(net_leds_iter)
+            .flat_map(|((r, g), b)| vec!(r, g, b));
 
         let buf =
             iter::once(0u8)
