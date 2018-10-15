@@ -30,9 +30,9 @@
 #include <avr/power.h>
 #endif
 
-#define PIXELS_PIN 1
-#define BUTTON_PIN 2
-#define BUTTON_KEY KEY_ENTER
+#define PIXELS_PIN 23
+#define BUTTON_PIN 0
+#define BUTTON_KEY KEY_SYSTEM_WAKE_UP
 
 #define RAWHID_RX_SIZE 64
 #define NUMPIXELS 12
