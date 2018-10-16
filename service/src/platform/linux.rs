@@ -18,7 +18,7 @@ pub fn cpu_stats() -> Vec<(u32, u32)> {
         .collect::<Vec<_>>()
 }
 
-pub fn net_stats() -> Vec<(u32, u32)> {
+pub fn net_stats() -> Vec<(u64, u64)> {
     BufReader::new(File::open("/proc/net/dev").unwrap())
         .lines()
         .filter_map(|r| {
@@ -27,8 +27,10 @@ pub fn net_stats() -> Vec<(u32, u32)> {
             let name = split1[0].trim();
             if name.starts_with("en") || name.starts_with("wl") {
                 let mut nums = split1[1].split_whitespace();
-                let received_bytes = nums.nth(0).and_then(|s| s.parse::<u32>().ok()).unwrap();
-                let sent_bytes = nums.nth(7).and_then(|s| s.parse::<u32>().ok()).unwrap();
+                // Take the first
+                let received_bytes = nums.nth(0).and_then(|s| s.parse::<u64>().ok()).unwrap();
+                // Take the 7th after the first (8th)
+                let sent_bytes = nums.nth(7).and_then(|s| s.parse::<u64>().ok()).unwrap();
                 Some((received_bytes, sent_bytes))
             } else {
                 None

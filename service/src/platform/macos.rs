@@ -61,7 +61,7 @@ pub fn cpu_stats() -> Vec<(u32, u32)> {
     }
 }
 
-pub fn net_stats() -> Vec<(u32, u32)> {
+pub fn net_stats() -> Vec<(u64, u64)> {
     // FIXME
     vec!((0, 0))
 }

@@ -68,7 +68,7 @@ impl CpuInfo {
 
 pub struct NetInfo {
     // FIXME: Technically this should be a map with the interface name as its key.
-    last_vals: Vec<(u32, u32)>,
+    last_vals: Vec<(u64, u64)>,
 }
 
 impl NetInfo {
