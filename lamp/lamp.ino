@@ -91,6 +91,11 @@ void loop() {
     uint32_t now = millis();
 
     if (digitalRead(BUTTON_PIN) == LOW && !key_was_pressed && now - button_event_millis > 10) {
+        // If suspended, send the remote wake-up ctl.
+        if (UDINT & (1<<SUSPI)) {
+            UDCON |= (1<<RMWKUP);
+            while (UDCON & (1<<RMWKUP));
+        }
         Keyboard.press(BUTTON_KEY);
         key_was_pressed = true;
         button_event_millis = now;

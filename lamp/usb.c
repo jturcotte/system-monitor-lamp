@@ -184,7 +184,7 @@ static const uint8_t PROGMEM config1_descriptor[CONFIG1_DESC_SIZE] = {
 	NUM_INTERFACE,				// bNumInterfaces
 	1,					// bConfigurationValue
 	0,					// iConfiguration
-	0xC0,					// bmAttributes
+	0xA0,					// bmAttributes
 	50,					// bMaxPower
 
         // interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
