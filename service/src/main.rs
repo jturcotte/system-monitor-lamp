@@ -29,8 +29,6 @@ use std::{iter, thread, time};
 const DEVICE_VID: u16 = 0x16c0;
 const DEVICE_PID: u16 = 0x0486;
 const REPORT_INTERVAL: time::Duration = time::Duration::from_millis(2000);
-// FIXME: Should ideally be abstracted on the wire, but this makes things easier.
-const NUM_LEDS: usize = 12;
 // FIXME: Allow overriding from the command line.
 const DISK_READ_CAP: f64 = 200000000.;
 const DISK_WRITTEN_CAP:f64 = 200000000.;
@@ -147,29 +145,20 @@ fn main() {
         let net_stats = net_info.fetch_stats();
         // println!("CPU {:?} DISK {:?} NET {:?}", cpu_stats, disk_stats, net_stats);
 
-        let led_per_cpu_param = NUM_LEDS / cpu_stats.len();
-        let led_per_disk_param = NUM_LEDS / disk_stats.len();
-        let led_per_net_param = NUM_LEDS / net_stats.len();
-        let cpu_leds_iter = cpu_stats
-            .iter()
-            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_cpu_param));
-        let disk_leds_iter = disk_stats
-            .iter()
-            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_disk_param));
-        let net_leds_iter = net_stats
-            .iter()
-            .flat_map(|p| iter::repeat((255. * p) as u8).take(led_per_net_param));
-
-        let leds_iter = cpu_leds_iter
-            .zip(disk_leds_iter)
-            .zip(net_leds_iter)
-            .flat_map(|((r, g), b)| vec!(r, g, b));
-
         let report_id = 0u8;
         let buf =
             iter::once(report_id)
-            .chain(leds_iter)
+            // Disk = red
+            .chain(iter::once(disk_stats.len() as u8))
+            .chain(disk_stats.iter().map(|p| (255. * p) as u8))
+            // CPU = green
+            .chain(iter::once(cpu_stats.len() as u8))
+            .chain(cpu_stats.iter().map(|p| (255. * p) as u8))
+            // Net = blue
+            .chain(iter::once(net_stats.len() as u8))
+            .chain(net_stats.iter().map(|p| (255. * p) as u8))
             .collect::<Vec<u8>>();
+
         device.write(&buf[..]).expect("Error writing to the USB device");
         thread::sleep(REPORT_INTERVAL);
     }

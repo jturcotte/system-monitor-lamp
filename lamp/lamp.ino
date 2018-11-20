@@ -35,7 +35,8 @@
 #define BUTTON_KEY KEY_SYSTEM_WAKE_UP
 
 #define RAWHID_RX_SIZE 64
-#define NUMPIXELS 12
+#define NUMPIXELS 24
+#define SOURCE_BUF_SIZE NUMPIXELS * 3
 #define SUSPEND_LEDS_AFTER 30000
 
 enum MonitorState {
@@ -47,8 +48,9 @@ enum MonitorState {
 Adafruit_NeoPixel Pixels = Adafruit_NeoPixel(NUMPIXELS, PIXELS_PIN, NEO_GRB + NEO_KHZ800);
 extern const uint8_t gamma8[];
 
-uint8_t source_buf1[RAWHID_RX_SIZE];
-uint8_t source_buf2[RAWHID_RX_SIZE];
+uint8_t recv_buf[RAWHID_RX_SIZE];
+uint8_t source_buf1[SOURCE_BUF_SIZE];
+uint8_t source_buf2[SOURCE_BUF_SIZE];
 uint8_t *current_buf = source_buf1;
 uint8_t *prev_buf = source_buf2;
 uint32_t prev_buf_swap_millis = 0;
@@ -105,9 +107,29 @@ void loop() {
         button_event_millis = now;
     }
 
-    int r = RawHID.recv(prev_buf, 0);
+    int r = RawHID.recv(recv_buf, 0);
     if (r > 0) {
         monitor_state = MONITORING;
+
+        // Walk the read buffer to extract each pixel target color during the next interpolation.
+        uint8_t *read_ptr = recv_buf;
+        for (uint8_t color_offset = 0; color_offset < 3; ++color_offset) {
+            // Start with red, then green, then blue
+            uint8_t *write_ptr = prev_buf + color_offset;
+            // First byte is the number of values for r, g or b.
+            uint8_t num_sources = *read_ptr++;
+            // Then for each read byte, copy the read value by splitting the ring in enough parts
+            uint8_t dupli_count = NUMPIXELS / num_sources;
+            uint8_t *end_read = read_ptr + num_sources;
+            for (; read_ptr < end_read; ++read_ptr) {
+                for (uint8_t pixel = 0; pixel < dupli_count; ++pixel) {
+                    *write_ptr = *read_ptr;
+                    // Move to the next pixel for this component.
+                    write_ptr += 3;
+                }
+            }
+        }
+
         swap_buffers(now);
     }
 
@@ -119,7 +141,7 @@ void loop() {
         render_animation_frame(elapsed, duration);
     } else if (monitor_state == MONITORING && elapsed >= duration * 2) {
         monitor_state = ANIMATING_TO_ZERO;
-        memset(prev_buf, 0, RAWHID_RX_SIZE);
+        memset(prev_buf, 0, SOURCE_BUF_SIZE);
         swap_buffers(now);
     } else if (monitor_state == ANIMATING_TO_ZERO) {
         monitor_state = SUSPENDED;
