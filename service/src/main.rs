@@ -29,11 +29,13 @@ use std::{iter, thread, time};
 const DEVICE_VID: u16 = 0x16c0;
 const DEVICE_PID: u16 = 0x0486;
 const REPORT_INTERVAL: time::Duration = time::Duration::from_millis(2000);
+// Those numbers should represent a "high" usage and should be lower than the maximum
+// so that a normal usage is still visible and isn't dimmed out too much.
 // FIXME: Allow overriding from the command line.
-const DISK_READ_CAP: f64 = 200000000.;
-const DISK_WRITTEN_CAP:f64 = 200000000.;
-const NET_RECV_CAP:f64 = 1000000.;
-const NET_SENT_CAP:f64 = 100000.;
+const DISK_READ_CAP: f64 = 100000000.;
+const DISK_WRITTEN_CAP:f64 = 100000000.;
+const NET_RECV_CAP:f64 = 2000000.;
+const NET_SENT_CAP:f64 =  500000.;
 
 pub struct CpuInfo {
     last_vals: Vec<(u32, u32)>,
