@@ -92,6 +92,7 @@ void render_animation_frame(uint32_t elapsed, uint32_t duration) {
 void loop() {
     uint32_t now = millis();
 
+    // === Handle the button key press/release
     if (digitalRead(BUTTON_PIN) == LOW && !key_was_pressed && now - button_event_millis > 10) {
         // If suspended, send the remote wake-up ctl.
         if (UDINT & (1<<SUSPI)) {
@@ -107,6 +108,7 @@ void loop() {
         button_event_millis = now;
     }
 
+    // === Check if any new pixel info was written on USB
     int r = RawHID.recv(recv_buf, 0);
     if (r > 0) {
         monitor_state = MONITORING;
@@ -133,6 +135,7 @@ void loop() {
         swap_buffers(now);
     }
 
+    // === Animate by interpolating between the two last received pixel values
     // Assume that the updates are sent with an even timing.
     // Use the previous duration for the current interpolation.
     const uint32_t duration = buf_swap_millis - prev_buf_swap_millis;
