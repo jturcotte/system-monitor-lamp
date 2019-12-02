@@ -7,3 +7,10 @@ authors = ["Jocelyn Turcotte <turcotte.j@gmail.com>"]
 hidapi = "0.5.0"
 libc = "*"
 mach = "0.2.2"
+
+[package.metadata.deb]
+depends = "$auto, systemd"
+assets = [
+    ["system-monitor-lamp.service", "usr/lib/systemd/system/", "644"],
+    ["target/release/system-monitor-lamp", "usr/bin/", "755"]
+]
