@@ -23,8 +23,6 @@
 #error Teensiduino must be configured to use the "Raw HID" USB Type.
 #endif
 
-#include "Keyboard.h"
-#include "my_usb_api.h"
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
 #include <avr/power.h>
@@ -32,7 +30,6 @@
 
 #define PIXELS_PIN 23
 #define BUTTON_PIN 0
-#define BUTTON_KEY KEY_SYSTEM_WAKE_UP
 
 #define RAWHID_RX_SIZE 64
 #define NUMPIXELS 24
@@ -55,6 +52,7 @@ uint8_t *current_buf = source_buf1;
 uint8_t *prev_buf = source_buf2;
 uint32_t prev_buf_swap_millis = 0;
 uint32_t buf_swap_millis = 1;
+bool bright_when_idle = false;
 bool key_was_pressed = false;
 // Prevents unwanted events due to a partial contact.
 uint32_t button_event_millis = 0;
@@ -62,7 +60,6 @@ MonitorState monitor_state = SUSPENDED;
 
 void setup() {
     Pixels.begin();
-    Keyboard.begin();
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
@@ -76,7 +73,7 @@ void swap_buffers(uint32_t now) {
 }
 
 void render_animation_frame(uint32_t elapsed, uint32_t duration) {
-    for (int i = 0; i < NUMPIXELS; ++i) {
+    for (uint16_t i = 0; i < NUMPIXELS; ++i) {
         uint8_t r = ((duration - elapsed) * prev_buf[i*3+0] + elapsed * current_buf[i*3+0]) / duration;
         uint8_t g = ((duration - elapsed) * prev_buf[i*3+1] + elapsed * current_buf[i*3+1]) / duration;
         uint8_t b = ((duration - elapsed) * prev_buf[i*3+2] + elapsed * current_buf[i*3+2]) / duration;
@@ -99,11 +96,21 @@ void loop() {
             UDCON |= (1<<RMWKUP);
             while (UDCON & (1<<RMWKUP));
         }
-        Keyboard.press(BUTTON_KEY);
+
+        // Do one animation step by setting the next buffer state to what we'd expect
+        // from receiving stats with that flag.
+        if (bright_when_idle) {
+            bright_when_idle = false;
+            memset(prev_buf, 0, SOURCE_BUF_SIZE);
+        } else {
+            bright_when_idle = true;
+            memset(prev_buf, 255, SOURCE_BUF_SIZE);
+        }
+        swap_buffers(now);
+
         key_was_pressed = true;
         button_event_millis = now;
     } else if (digitalRead(BUTTON_PIN) == HIGH && key_was_pressed && now - button_event_millis > 10) {
-        Keyboard.release(BUTTON_KEY);
         key_was_pressed = false;
         button_event_millis = now;
     }
@@ -129,6 +136,21 @@ void loop() {
                     // Move to the next pixel for this component.
                     write_ptr += 3;
                 }
+            }
+        }
+
+        // "Reverse" the RGB if the lamp is in bright-when-idle mode.
+        if (bright_when_idle) {
+            for (uint16_t i = 0; i < NUMPIXELS; ++i) {
+                uint8_t& r = prev_buf[i*3+0];
+                uint8_t& g = prev_buf[i*3+1];
+                uint8_t& b = prev_buf[i*3+2];
+                uint8_t r2 = min(255, uint16_t(255 - max(g, b)) + r);
+                uint8_t g2 = min(255, uint16_t(255 - max(r, b)) + g);
+                uint8_t b2 = min(255, uint16_t(255 - max(r, g)) + b);
+                r = r2;
+                g = g2;
+                b = b2;
             }
         }
 

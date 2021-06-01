@@ -1,15 +1,11 @@
 # System Monitor Lamp
-A single-key USB keyboard-lamp that lights up according to the CPU, network and disk usages of the host.
+A USB lamp that lights up according to the CPU, network and disk usages of the host.
 
 ![The final result](lamp.gif)
 
 Each metric is displayed as one color channel; green for CPU, blue for network and red for disk.
 The LEDs on the ring are split according to the number of CPU cores for the green channel.
 For disk and network the ring is split in two, left for input and right for output.
-
-The lamp also functions as a USB keyboard. The Big Switch can be configured to report a key
-to be bound as a global shortcut and perform tasks on the host's operating system. I use it
-to lock the computer when I want to get a coffee, but lately I'm considering binding it to `killall -9 java`...
 
 ## How it works
 The Teensy firmware has support for [Raw HID](https://www.pjrc.com/teensy/rawhid.html), which can be used to
@@ -42,9 +38,3 @@ This can also be changed by editing [lamp.ino](lamp/lamp.ino).
 - Windows support isn't implemented.
 
 I used [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) 1.44 for the USB lamp.
-I have not tested newer versions but as long as the linker is happy about the usb object files of this project
-trying to override the ones from the Teensyduino library, it should be fine.
-
-The lamp code will probably only work on a Teensy 2.0 and not any other version as I had to make a copy of their ATMEGA32U4
-USB code to allow both RawHID and keyboard interfaces together, as well as tweak the `bMaxPower` constant and enable
-remote wake-up of the host when the key is pressed. Using ARM Teensy variants would require doing the same on a copy of their USB code.
